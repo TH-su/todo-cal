@@ -272,6 +272,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .ti-title.imp3{font-weight:700;color:var(--ng)}
 .ti-title.done{font-weight:500;color:var(--g5);text-decoration:line-through}
 .ti.imp3:not(.completed) .ti-title{color:var(--ng)}
+.ti-stars{flex-shrink:0;align-self:center;margin-left:6px;font-size:13px;letter-spacing:-1px;white-space:nowrap}
+.ti-stars.imp1{filter:grayscale(.4);opacity:.55}
+.ti-stars.imp2{filter:none;opacity:.9}
+.ti-stars.imp3{filter:none;opacity:1}
+.ti-stars.done{filter:grayscale(1);opacity:.4}
+/* reminder edit row */
+.rem-row{display:flex;gap:6px;align-items:center;margin-bottom:6px}
+.rem-row .inp{flex:1}
 .ti.overdue{border-left:4px solid var(--ng);background:var(--ng-l)}
 .ti.overdue+.ti{border-top-color:transparent}
 .ti-due{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;
@@ -281,6 +289,52 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .ti-due.today{background:var(--warn);color:#fff}
 .ti-due.soon{background:var(--pri);color:#fff}
 .ti-due.done{background:var(--g3);color:var(--g6);text-decoration:line-through}
+
+/* ── Calendar year view ── */
+.cal-year-grid{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+@media(min-width:600px){.cal-year-grid{grid-template-columns:repeat(4,1fr)}}
+.cal-year-cell{background:var(--g0);border:1.5px solid var(--g3);border-radius:var(--r2);
+  padding:14px 8px;cursor:pointer;font-family:inherit;color:var(--g9);
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  min-height:88px;transition:background .12s,border-color .12s}
+.cal-year-cell:hover{background:var(--pri-l);border-color:var(--pri)}
+.cal-year-cell.current{background:var(--pri-l);border-color:var(--pri);font-weight:700}
+.cal-year-month{font-size:17px;font-weight:600}
+.cal-year-counts{display:flex;gap:5px;align-items:center;flex-wrap:wrap;justify-content:center;min-height:18px}
+
+/* ── Calendar multi-day view (week/2day) ── */
+.cal-multi{display:grid;gap:4px}
+.cal-multi-col{background:var(--g0);border:1px solid var(--g3);border-radius:var(--r);
+  min-height:280px;padding:6px;display:flex;flex-direction:column;gap:4px}
+.cal-multi-col.today{background:var(--pri-l);border-color:var(--pri)}
+.cal-multi-hd{display:flex;align-items:baseline;justify-content:center;gap:4px;
+  padding:4px 0;border-bottom:1px solid var(--g3);margin-bottom:2px}
+.cal-multi-day{font-size:18px;font-weight:700;color:var(--g9)}
+.cal-multi-dow{font-size:12px;color:var(--g7)}
+.cal-multi-hd.sun .cal-multi-day,.cal-multi-hd.sun .cal-multi-dow{color:var(--ng)}
+.cal-multi-hd.sat .cal-multi-day,.cal-multi-hd.sat .cal-multi-dow{color:var(--pri)}
+.cal-multi-add{font-size:11px;padding:3px 6px;background:var(--g1);border:1px dashed var(--g4);
+  border-radius:4px;color:var(--g7);cursor:pointer;font-family:inherit}
+.cal-multi-add:hover{background:var(--pri-l);border-color:var(--pri);color:var(--pri-d)}
+.cal-multi-body{display:flex;flex-direction:column;gap:4px;flex:1}
+.cal-multi-empty{font-size:12px;color:var(--g5);text-align:center;padding:14px 0}
+.cal-multi-task{background:var(--g1);border-radius:5px;padding:6px 8px;cursor:pointer;
+  border-left:3px solid var(--g4);font-size:12px;line-height:1.4}
+.cal-multi-task:hover{background:var(--pri-l)}
+.cal-multi-task.overdue{background:var(--ng-l);border-left-color:var(--ng)}
+.cal-multi-task-top{display:flex;align-items:flex-start;justify-content:space-between;gap:4px;margin-bottom:2px}
+.cal-multi-title{flex:1;word-break:break-word}
+.cal-multi-title.imp1{font-weight:500;color:var(--g9)}
+.cal-multi-title.imp2{font-weight:700;color:var(--g9)}
+.cal-multi-title.imp3{font-weight:700;color:var(--ng)}
+.cal-multi-title.done{font-weight:500;color:var(--g5);text-decoration:line-through}
+.cal-multi-stars{flex-shrink:0;font-size:10px;letter-spacing:-2px;opacity:.9}
+.cal-multi-stars.imp1{opacity:.55}
+.cal-multi-stars.done{filter:grayscale(1);opacity:.4}
+.cal-multi-task-meta{display:flex;gap:4px;flex-wrap:wrap;align-items:center}
+/* 2day-view: even wider per column → larger fonts */
+.cal-multi[style*="repeat(2"] .cal-multi-task{font-size:13px;padding:8px 10px}
+.cal-multi[style*="repeat(2"] .cal-multi-stars{font-size:12px}
 
 /* ── Toolbar (search + filter chips) ── */
 .toolbar{margin-bottom:10px}
@@ -383,7 +437,10 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       </div>
     </div>
     <div class="cal-view-switch">
+      <button class="cal-view-btn" id="vbtn-year" onclick="setCalView('year')">1年</button>
       <button class="cal-view-btn on" id="vbtn-grid" onclick="setCalView('grid')">月間</button>
+      <button class="cal-view-btn" id="vbtn-week" onclick="setCalView('week')">週間</button>
+      <button class="cal-view-btn" id="vbtn-2day" onclick="setCalView('2day')">2日</button>
       <button class="cal-view-btn" id="vbtn-list" onclick="setCalView('list')">リスト</button>
     </div>
     <div id="cal-content"></div>
@@ -485,15 +542,14 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
         <button type="button" class="imp-btn" data-imp="3" onclick="setImpField(3)">⭐⭐⭐</button>
       </div>
     </div>
-    <div class="form-row form-2col">
-      <div>
-        <label>期限</label>
-        <input type="datetime-local" id="f-due" class="inp">
-      </div>
-      <div>
-        <label>リマインダー</label>
-        <input type="datetime-local" id="f-reminder" class="inp">
-      </div>
+    <div class="form-row">
+      <label>期限</label>
+      <input type="datetime-local" id="f-due" class="inp">
+    </div>
+    <div class="form-row">
+      <label>リマインダー (複数可)</label>
+      <div id="f-reminders"></div>
+      <button type="button" class="btn btn-sec btn-sm" onclick="addReminderField()" style="margin-top:6px">＋ リマインダー追加</button>
     </div>
     <div class="form-row">
       <label>詳細</label>
@@ -625,11 +681,26 @@ function validateAndMigrate(db) {
       t.modifiedAt = Math.max(ca, cr) || now;
     }
     if (typeof t.deleted !== 'boolean') t.deleted = false;
-    // New fields: importance / due / reminderAt
+    // New fields: importance / due / reminders[]
     if (typeof t.importance !== 'number' || t.importance < 1 || t.importance > 3) t.importance = 1;
     if (t.due === undefined) t.due = null;
-    if (t.reminderAt === undefined) t.reminderAt = null;
-    if (typeof t.reminderFired !== 'boolean') t.reminderFired = false;
+    // Migrate single reminderAt → reminders array
+    if (!Array.isArray(t.reminders)) {
+      if (t.reminderAt) {
+        t.reminders = [{ id: uid(), at: t.reminderAt, fired: !!t.reminderFired }];
+      } else {
+        t.reminders = [];
+      }
+    }
+    // Normalize each reminder
+    t.reminders = t.reminders.filter(r => r && r.at).map(r => ({
+      id: r.id || uid(),
+      at: r.at,
+      fired: !!r.fired
+    }));
+    // Clean up legacy fields after migration
+    delete t.reminderAt;
+    delete t.reminderFired;
   });
   // Per-category migration
   db.categories.forEach(c => {
@@ -921,20 +992,23 @@ function checkReminders() {
   const now = Date.now();
   let fired = 0;
   DB.tasks.forEach(t => {
-    if (t.deleted || t.completedAt || !t.reminderAt || t.reminderFired) return;
-    const rt = new Date(t.reminderAt).getTime();
-    if (!isNaN(rt) && rt <= now) {
-      try {
-        new Notification(t.title || 'TODOリマインダー', {
-          body: (t.due ? '期限: ' + fmtDueShort(t.due) + '\n' : '') + (t.detail || '').slice(0, 100),
-          tag: 'todo-' + t.id,
-          requireInteraction: false
-        });
-        t.reminderFired = true;
-        t.modifiedAt = Date.now();
-        fired++;
-      } catch(e) { console.warn('Notification failed:', e); }
-    }
+    if (t.deleted || t.completedAt || !Array.isArray(t.reminders)) return;
+    t.reminders.forEach(r => {
+      if (!r || r.fired || !r.at) return;
+      const rt = new Date(r.at).getTime();
+      if (!isNaN(rt) && rt <= now) {
+        try {
+          new Notification(t.title || 'TODOリマインダー', {
+            body: (t.due ? '期限: ' + fmtDueShort(t.due) + '\n' : '') + (t.detail || '').slice(0, 100),
+            tag: 'todo-' + t.id + '-' + r.id,
+            requireInteraction: false
+          });
+          r.fired = true;
+          t.modifiedAt = Date.now();
+          fired++;
+        } catch(e) { console.warn('Notification failed:', e); }
+      }
+    });
   });
   if (fired > 0) saveDB();
 }
@@ -1256,6 +1330,8 @@ function taskItemHtml(t, opts) {
     : '';
   const titleClass = t.completedAt ? 'done' : ('imp' + imp);
   const rowClass = (ds === 'overdue' && !t.completedAt) ? ' overdue' : '';
+  const starClass = t.completedAt ? 'done' : ('imp' + imp);
+  const stars = '⭐'.repeat(imp);
   return `<div class="ti${rowClass}" data-id="${t.id}">
     <input type="checkbox" class="ti-cb" ${t.completedAt ? 'checked' : ''}
       onclick="event.stopPropagation();toggleDone('${t.id}',this.checked)">
@@ -1268,6 +1344,7 @@ function taskItemHtml(t, opts) {
         ${subText}
       </div>
     </div>
+    <span class="ti-stars ${starClass}">${stars}</span>
   </div>`;
 }
 
@@ -1306,8 +1383,9 @@ function openDetail(id) {
     const ds = dueState(t.due, t.completedAt);
     metaHtml += `<p>期限: <span class="ti-due ${ds||''}">${escHtml(fmtDueShort(t.due))}</span> <span style="color:var(--g6);font-size:12px">(${fmtDateTime(t.due)})</span></p>`;
   }
-  if (t.reminderAt) {
-    metaHtml += `<p>リマインダー: <span>${fmtDateTime(t.reminderAt)}</span></p>`;
+  if (Array.isArray(t.reminders) && t.reminders.length > 0) {
+    metaHtml += `<p>リマインダー: <span>${t.reminders.map(r =>
+      fmtDateTime(r.at) + (r.fired ? ' (通知済)' : '')).join(' / ')}</span></p>`;
   }
   if (t.completedAt) metaHtml += `<p>完了日時: <span>${fmtDateTime(t.completedAt)}</span></p>`;
   if (cat) metaHtml += `<p>カテゴリ: <span><span class="badge" style="background:${cat.color}">${escHtml(cat.name)}</span></span></p>`;
@@ -1377,7 +1455,37 @@ function deleteTask(id) {
 let editingTaskId = null;
 let editingSubtasks = [];
 let editingImportance = 1;
+let editingReminders = []; // [{id, at, fired}]
 let presetCreatedAt = null; // For calendar-day-tap-add: YYYY-MM-DD string
+
+function renderReminderFields() {
+  const el = document.getElementById('f-reminders');
+  if (!el) return;
+  if (editingReminders.length === 0) {
+    el.innerHTML = `<p style="font-size:13px;color:var(--g6)">リマインダー未設定</p>`;
+    return;
+  }
+  el.innerHTML = editingReminders.map((r, i) =>
+    `<div class="rem-row">
+      <input type="datetime-local" class="inp" value="${isoToLocalInputValue(r.at)}"
+        onchange="editingReminders[${i}].at = localInputToIso(this.value); editingReminders[${i}].fired = false">
+      <button type="button" class="sub-del" title="削除" onclick="removeReminderField(${i})">×</button>
+    </div>`
+  ).join('');
+}
+
+function addReminderField() {
+  // Default: 30 min from now
+  const d = new Date(Date.now() + 30*60*1000);
+  d.setSeconds(0,0);
+  editingReminders.push({ id: uid(), at: d.toISOString(), fired: false });
+  renderReminderFields();
+}
+
+function removeReminderField(idx) {
+  editingReminders.splice(idx, 1);
+  renderReminderFields();
+}
 
 function setImpField(level) {
   editingImportance = level;
@@ -1390,15 +1498,16 @@ function openAddModal() {
   editingTaskId = null;
   editingSubtasks = [];
   editingImportance = 1;
+  editingReminders = [];
   document.getElementById('task-modal-title').textContent = 'タスクを追加';
   document.getElementById('task-save-btn').textContent = '追加';
   document.getElementById('f-title').value = '';
   document.getElementById('f-detail').value = '';
   document.getElementById('f-due').value = '';
-  document.getElementById('f-reminder').value = '';
   populateCategorySelect(null);
   setImpField(1);
   renderSubtaskFields();
+  renderReminderFields();
   openModal('mk-task');
   setTimeout(() => document.getElementById('f-title').focus(), 300);
 }
@@ -1417,15 +1526,16 @@ function openEditModal(id) {
   editingTaskId = id;
   editingSubtasks = (t.subtasks || []).map(s => ({...s}));
   editingImportance = t.importance || 1;
+  editingReminders = (t.reminders || []).map(r => ({...r}));
   document.getElementById('task-modal-title').textContent = 'タスクを編集';
   document.getElementById('task-save-btn').textContent = '保存';
   document.getElementById('f-title').value = t.title;
   document.getElementById('f-detail').value = t.detail || '';
   document.getElementById('f-due').value = isoToLocalInputValue(t.due);
-  document.getElementById('f-reminder').value = isoToLocalInputValue(t.reminderAt);
   populateCategorySelect(t.categoryId);
   setImpField(editingImportance);
   renderSubtaskFields();
+  renderReminderFields();
   closeModal('mk-detail');
   openModal('mk-task');
 }
@@ -1485,7 +1595,10 @@ function saveTask() {
 
   const now = Date.now();
   const dueIso = localInputToIso(document.getElementById('f-due').value);
-  const remIso = localInputToIso(document.getElementById('f-reminder').value);
+  // Sanitize reminders (drop empty)
+  const reminders = editingReminders
+    .filter(r => r.at)
+    .map(r => ({ id: r.id || uid(), at: r.at, fired: !!r.fired }));
   if (editingTaskId) {
     const t = DB.tasks.find(t => t.id === editingTaskId);
     if (t) {
@@ -1495,19 +1608,13 @@ function saveTask() {
       t.subtasks = editingSubtasks;
       t.importance = editingImportance;
       t.due = dueIso;
-      // If reminder changed, reset fired flag
-      if (t.reminderAt !== remIso) {
-        t.reminderAt = remIso;
-        t.reminderFired = false;
-      }
+      t.reminders = reminders;
       t.modifiedAt = now;
     }
     showToast('タスクを更新しました');
   } else {
-    // Compute createdAt: preset (calendar tap) or now
     let createdAt = nowISO();
     if (presetCreatedAt) {
-      // preserve current time-of-day but use preset date
       const n = new Date();
       const [y, m, dd] = presetCreatedAt.split('-').map(Number);
       const c = new Date(y, m-1, dd, n.getHours(), n.getMinutes(), n.getSeconds());
@@ -1520,8 +1627,7 @@ function saveTask() {
       subtasks: editingSubtasks,
       importance: editingImportance,
       due: dueIso,
-      reminderAt: remIso,
-      reminderFired: false,
+      reminders,
       modifiedAt: now,
       deleted: false
     });
@@ -1532,7 +1638,7 @@ function saveTask() {
   renderTasks();
   if (currentScreen === 'cal') renderCal();
   closeModal('mk-task');
-  if (remIso) requestNotificationPermission();
+  if (reminders.length) requestNotificationPermission();
 }
 
 // Enter key to add subtask
@@ -1546,18 +1652,101 @@ document.getElementById('f-title').addEventListener('keydown', e => {
 // ── Calendar ──────────────────────────────────────────────
 let calYear = new Date().getFullYear();
 let calMonth = new Date().getMonth(); // 0-indexed
+let calRefDate = new Date(); calRefDate.setHours(0,0,0,0); // anchor day for week/2day view
 let calView = 'grid';
+const CAL_VIEWS = ['year','grid','week','2day','list'];
 
 function setCalView(v) {
+  if (!CAL_VIEWS.includes(v)) v = 'grid';
   calView = v;
-  document.getElementById('vbtn-grid').classList.toggle('on', v === 'grid');
-  document.getElementById('vbtn-list').classList.toggle('on', v === 'list');
+  CAL_VIEWS.forEach(name => {
+    const btn = document.getElementById('vbtn-' + name);
+    if (btn) btn.classList.toggle('on', v === name);
+  });
   renderCal();
 }
 
 function renderCal() {
-  document.getElementById('cal-content').innerHTML =
-    calView === 'grid' ? renderCalGrid() : renderCalList();
+  const el = document.getElementById('cal-content');
+  switch (calView) {
+    case 'year': el.innerHTML = renderCalYear(); break;
+    case 'grid': el.innerHTML = renderCalGrid(); break;
+    case 'week': el.innerHTML = renderCalWeek(); break;
+    case '2day': el.innerHTML = renderCal2Day(); break;
+    case 'list': el.innerHTML = renderCalList(); break;
+  }
+  attachSwipe();
+}
+
+// ── Period navigation (works for all view types) ──────────
+function navPrev() {
+  if (calView === 'year') {
+    calYear--;
+  } else if (calView === 'grid' || calView === 'list') {
+    calMonth--;
+    if (calMonth < 0) { calMonth = 11; calYear--; }
+  } else if (calView === 'week') {
+    calRefDate.setDate(calRefDate.getDate() - 7);
+  } else if (calView === '2day') {
+    calRefDate.setDate(calRefDate.getDate() - 2);
+  }
+  renderCal();
+}
+
+function navNext() {
+  if (calView === 'year') {
+    calYear++;
+  } else if (calView === 'grid' || calView === 'list') {
+    calMonth++;
+    if (calMonth > 11) { calMonth = 0; calYear++; }
+  } else if (calView === 'week') {
+    calRefDate.setDate(calRefDate.getDate() + 7);
+  } else if (calView === '2day') {
+    calRefDate.setDate(calRefDate.getDate() + 2);
+  }
+  renderCal();
+}
+
+// Jump from year-view month tap → month grid
+function jumpToMonth(y, m) {
+  calYear = y;
+  calMonth = m;
+  setCalView('grid');
+}
+
+// ── Swipe handler ─────────────────────────────────────────
+let _swipeHandlerAttached = false;
+function attachSwipe() {
+  if (_swipeHandlerAttached) return;
+  const el = document.getElementById('cal-content');
+  if (!el) return;
+  let startX = 0, startY = 0, tracking = false;
+  el.addEventListener('touchstart', e => {
+    if (e.touches.length !== 1) return;
+    startX = e.touches[0].clientX;
+    startY = e.touches[0].clientY;
+    tracking = true;
+  }, { passive: true });
+  el.addEventListener('touchend', e => {
+    if (!tracking) return;
+    tracking = false;
+    const t = e.changedTouches[0];
+    const dx = t.clientX - startX;
+    const dy = t.clientY - startY;
+    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
+      if (dx < 0) navNext(); else navPrev();
+    }
+  }, { passive: true });
+  // Mouse-drag fallback for desktop testing
+  let mDown = false, mx = 0;
+  el.addEventListener('mousedown', e => { mDown = true; mx = e.clientX; });
+  el.addEventListener('mouseup', e => {
+    if (!mDown) return;
+    mDown = false;
+    const dx = e.clientX - mx;
+    if (Math.abs(dx) > 80) { if (dx < 0) navNext(); else navPrev(); }
+  });
+  _swipeHandlerAttached = true;
 }
 
 function renderCalGrid() {
@@ -1585,9 +1774,9 @@ function renderCalGrid() {
 
   const dows = ['日','月','火','水','木','金','土'];
   let html = `<div class="cal-nav">
-    <button class="cal-nav-btn" onclick="prevMonth()">◀</button>
+    <button class="cal-nav-btn" onclick="navPrev()">◀</button>
     <span class="cal-title">${y}年${m+1}月</span>
-    <button class="cal-nav-btn" onclick="nextMonth()">▶</button>
+    <button class="cal-nav-btn" onclick="navNext()">▶</button>
   </div>
   <div class="cal-summary">
     <div class="cal-summary-item">未完了 <span class="cal-summary-num todo">${monthTodo}</span></div>
@@ -1651,9 +1840,9 @@ function renderCalList() {
   }
 
   let html = `<div class="cal-nav">
-    <button class="cal-nav-btn" onclick="prevMonth()">◀</button>
+    <button class="cal-nav-btn" onclick="navPrev()">◀</button>
     <span class="cal-title">${calYear}年${calMonth+1}月</span>
-    <button class="cal-nav-btn" onclick="nextMonth()">▶</button>
+    <button class="cal-nav-btn" onclick="navNext()">▶</button>
   </div>`;
 
   // Filter to current month
@@ -1729,16 +1918,119 @@ function buildDayMap() {
   return map;
 }
 
-function prevMonth() {
-  calMonth--;
-  if (calMonth < 0) { calMonth = 11; calYear--; }
-  renderCal();
+// Aliases for backward compatibility
+function prevMonth() { navPrev(); }
+function nextMonth() { navNext(); }
+
+// ── Year view ────────────────────────────────────────────
+function renderCalYear() {
+  const dayMap = buildDayMap();
+  const y = calYear;
+  let html = `<div class="cal-nav">
+    <button class="cal-nav-btn" onclick="navPrev()">◀</button>
+    <span class="cal-title">${y}年</span>
+    <button class="cal-nav-btn" onclick="navNext()">▶</button>
+  </div>
+  <div class="cal-year-grid">`;
+  for (let m = 0; m < 12; m++) {
+    const pad = n => String(n).padStart(2,'0');
+    const monthPrefix = `${y}-${pad(m+1)}`;
+    let todoCount = 0, doneCount = 0;
+    Object.keys(dayMap).forEach(ds => {
+      if (!ds.startsWith(monthPrefix)) return;
+      dayMap[ds].forEach(t => {
+        if (t.completedAt && toDateStr(t.completedAt) === ds) doneCount++;
+        else if (!t.completedAt && toDateStr(t.createdAt) === ds) todoCount++;
+      });
+    });
+    const isCurrentMonth = (y === new Date().getFullYear() && m === new Date().getMonth());
+    html += `<button class="cal-year-cell${isCurrentMonth ? ' current' : ''}"
+      onclick="jumpToMonth(${y},${m})">
+      <div class="cal-year-month">${m+1}月</div>
+      <div class="cal-year-counts">
+        ${todoCount ? `<span class="cal-count todo">${todoCount}</span>` : ''}
+        ${doneCount ? `<span class="cal-count done">${doneCount}</span>` : ''}
+        ${!todoCount && !doneCount ? `<span style="color:var(--g5);font-size:11px">―</span>` : ''}
+      </div>
+    </button>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
-function nextMonth() {
-  calMonth++;
-  if (calMonth > 11) { calMonth = 0; calYear++; }
-  renderCal();
+// ── Week view (7 days) ───────────────────────────────────
+function renderCalWeek() {
+  const ref = new Date(calRefDate);
+  ref.setHours(0,0,0,0);
+  // Compute start of week (Sunday)
+  const start = new Date(ref);
+  start.setDate(start.getDate() - start.getDay());
+  return renderMultiDayView(start, 7, '週間');
+}
+
+function renderCal2Day() {
+  const start = new Date(calRefDate);
+  start.setHours(0,0,0,0);
+  return renderMultiDayView(start, 2, '2日');
+}
+
+function renderMultiDayView(startDate, days, label) {
+  const dayMap = buildDayMap();
+  const today = todayStr();
+  const pad = n => String(n).padStart(2,'0');
+  const titleStart = `${startDate.getMonth()+1}/${startDate.getDate()}`;
+  const end = new Date(startDate); end.setDate(end.getDate() + days - 1);
+  const titleEnd = `${end.getMonth()+1}/${end.getDate()}`;
+  let html = `<div class="cal-nav">
+    <button class="cal-nav-btn" onclick="navPrev()">◀</button>
+    <span class="cal-title">${startDate.getFullYear()}年 ${titleStart} 〜 ${titleEnd}</span>
+    <button class="cal-nav-btn" onclick="navNext()">▶</button>
+  </div>
+  <div class="cal-multi" style="grid-template-columns:repeat(${days},1fr)">`;
+  const dows = ['日','月','火','水','木','金','土'];
+  for (let i = 0; i < days; i++) {
+    const d = new Date(startDate);
+    d.setDate(d.getDate() + i);
+    const ds = `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}`;
+    const dow = d.getDay();
+    const isToday = ds === today;
+    const tasks = (dayMap[ds] || []).slice().sort((a,b) => {
+      if (!a.completedAt && b.completedAt) return -1;
+      if (a.completedAt && !b.completedAt) return 1;
+      return (a.due ? new Date(a.due) : Infinity) - (b.due ? new Date(b.due) : Infinity);
+    });
+    html += `<div class="cal-multi-col${isToday ? ' today' : ''}">
+      <div class="cal-multi-hd${dow===0?' sun':dow===6?' sat':''}">
+        <span class="cal-multi-day">${d.getDate()}</span>
+        <span class="cal-multi-dow">(${dows[dow]})</span>
+      </div>
+      <button class="cal-multi-add" onclick="openAddModalForDate('${ds}')">＋ 追加</button>
+      <div class="cal-multi-body">
+        ${tasks.length === 0
+          ? `<div class="cal-multi-empty">―</div>`
+          : tasks.map(t => {
+              const cat = getCat(t.categoryId);
+              const dst = dueState(t.due, t.completedAt);
+              const imp = t.importance || 1;
+              const titleCls = t.completedAt ? 'done' : ('imp' + imp);
+              const stars = '⭐'.repeat(imp);
+              return `<div class="cal-multi-task${dst === 'overdue' && !t.completedAt ? ' overdue' : ''}"
+                onclick="openDetail('${t.id}')">
+                <div class="cal-multi-task-top">
+                  <span class="cal-multi-title ${titleCls}">${escHtml(t.title)}</span>
+                  <span class="cal-multi-stars ${titleCls}">${stars}</span>
+                </div>
+                <div class="cal-multi-task-meta">
+                  ${t.due ? `<span class="ti-due ${dst||''}">${escHtml(fmtDueShort(t.due))}</span>` : ''}
+                  ${cat ? `<span class="badge" style="background:${cat.color};font-size:10px">${escHtml(cat.name)}</span>` : ''}
+                </div>
+              </div>`;
+            }).join('')}
+      </div>
+    </div>`;
+  }
+  html += `</div>`;
+  return html;
 }
 
 function openDayPopup(ds) {
