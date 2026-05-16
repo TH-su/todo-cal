@@ -216,6 +216,9 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 /* ── Detail modal extra ── */
 .detail-meta{background:var(--g1);border-radius:var(--r);padding:10px 12px;margin-bottom:12px}
 .detail-meta p{font-size:14px;color:var(--g7);margin-bottom:4px}
+.imp1-text{color:var(--g9)}
+.imp2-text{color:var(--g9);font-weight:700}
+.imp3-text{color:var(--ng);font-weight:700}
 .detail-meta p:last-child{margin-bottom:0}
 .detail-meta span{color:var(--g9);font-weight:500}
 .detail-actions{display:flex;gap:8px;margin-top:14px;flex-wrap:wrap}
@@ -240,6 +243,44 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 .dp-title.done{text-decoration:line-through;color:var(--g5)}
 .dp-times{display:flex;flex-wrap:wrap;gap:8px 12px;margin-top:4px;font-size:12px;color:var(--g6)}
 .dp-times .time-done{color:var(--ok);font-weight:600}
+
+/* ── Add task button (header) ── */
+.add-task-btn{display:block;width:100%;padding:14px;margin-bottom:14px;
+  background:var(--pri);color:#fff;font-size:16px;font-weight:700;
+  border:none;border-radius:var(--r2);cursor:pointer;
+  box-shadow:0 2px 8px rgba(139,111,71,.35);transition:opacity .15s,transform .1s}
+.add-task-btn:hover{opacity:.92}
+.add-task-btn:active{transform:scale(.98)}
+
+/* ── Importance picker ── */
+.imp-picker{display:flex;gap:6px}
+.imp-btn{flex:1;padding:9px 6px;background:var(--g0);border:1.5px solid var(--g3);
+  border-radius:var(--r);cursor:pointer;font-size:15px;font-family:inherit;
+  transition:all .15s;color:var(--g9)}
+.imp-btn:hover{background:var(--g1)}
+.imp-btn[data-imp="2"]{font-weight:700}
+.imp-btn[data-imp="3"]{font-weight:700;color:var(--ng)}
+.imp-btn.on{background:var(--pri-l);border-color:var(--pri)}
+.imp-btn.on[data-imp="3"]{background:var(--ng-l);border-color:var(--ng)}
+.form-2col{display:grid;grid-template-columns:1fr 1fr;gap:10px}
+.form-2col label{display:block;font-size:14px;font-weight:600;color:var(--g7);margin-bottom:5px}
+@media(max-width:480px){.form-2col{grid-template-columns:1fr}}
+
+/* ── Task item: importance / due ── */
+.ti-title.imp1{font-weight:500;color:var(--g9)}
+.ti-title.imp2{font-weight:700;color:var(--g9)}
+.ti-title.imp3{font-weight:700;color:var(--ng)}
+.ti-title.done{font-weight:500;color:var(--g5);text-decoration:line-through}
+.ti.imp3:not(.completed) .ti-title{color:var(--ng)}
+.ti.overdue{border-left:4px solid var(--ng);background:var(--ng-l)}
+.ti.overdue+.ti{border-top-color:transparent}
+.ti-due{display:inline-flex;align-items:center;gap:3px;padding:2px 9px;
+  border-radius:99px;font-size:12px;font-weight:600;background:var(--g2);color:var(--g7);white-space:nowrap}
+.ti-due::before{content:"⏰ "}
+.ti-due.overdue{background:var(--ng);color:#fff}
+.ti-due.today{background:var(--warn);color:#fff}
+.ti-due.soon{background:var(--pri);color:#fff}
+.ti-due.done{background:var(--g3);color:var(--g6);text-decoration:line-through}
 
 /* ── Toolbar (search + filter chips) ── */
 .toolbar{margin-bottom:10px}
@@ -303,6 +344,7 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 <main>
   <!-- Task Screen -->
   <section id="scr-task" class="scr on">
+    <button class="add-task-btn" onclick="openAddModal()">＋ 新しいタスクを追加</button>
     <div class="toolbar">
       <div class="search-row">
         <span class="search-icon">🔍</span>
@@ -436,6 +478,24 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <select class="inp" id="f-category"></select>
     </div>
     <div class="form-row">
+      <label>重要度</label>
+      <div class="imp-picker">
+        <button type="button" class="imp-btn" data-imp="1" onclick="setImpField(1)">⭐</button>
+        <button type="button" class="imp-btn" data-imp="2" onclick="setImpField(2)">⭐⭐</button>
+        <button type="button" class="imp-btn" data-imp="3" onclick="setImpField(3)">⭐⭐⭐</button>
+      </div>
+    </div>
+    <div class="form-row form-2col">
+      <div>
+        <label>期限</label>
+        <input type="datetime-local" id="f-due" class="inp">
+      </div>
+      <div>
+        <label>リマインダー</label>
+        <input type="datetime-local" id="f-reminder" class="inp">
+      </div>
+    </div>
+    <div class="form-row">
       <label>詳細</label>
       <textarea class="inp" id="f-detail" placeholder="詳細・メモを入力..." rows="3"></textarea>
     </div>
@@ -560,12 +620,16 @@ function validateAndMigrate(db) {
       if (typeof s.done !== 'boolean') s.done = false;
     });
     if (typeof t.modifiedAt !== 'number') {
-      // Use most-recent known timestamp
       const ca = t.completedAt ? new Date(t.completedAt).getTime() : 0;
       const cr = new Date(t.createdAt).getTime();
       t.modifiedAt = Math.max(ca, cr) || now;
     }
     if (typeof t.deleted !== 'boolean') t.deleted = false;
+    // New fields: importance / due / reminderAt
+    if (typeof t.importance !== 'number' || t.importance < 1 || t.importance > 3) t.importance = 1;
+    if (t.due === undefined) t.due = null;
+    if (t.reminderAt === undefined) t.reminderAt = null;
+    if (typeof t.reminderFired !== 'boolean') t.reminderFired = false;
   });
   // Per-category migration
   db.categories.forEach(c => {
@@ -844,6 +908,43 @@ async function pullSync(silent) {
   }
 }
 
+// ── Reminders (browser Notification API) ──────────────────
+function requestNotificationPermission() {
+  if (!('Notification' in window)) return;
+  if (Notification.permission === 'default') {
+    try { Notification.requestPermission(); } catch(_) {}
+  }
+}
+
+function checkReminders() {
+  if (!('Notification' in window) || Notification.permission !== 'granted') return;
+  const now = Date.now();
+  let fired = 0;
+  DB.tasks.forEach(t => {
+    if (t.deleted || t.completedAt || !t.reminderAt || t.reminderFired) return;
+    const rt = new Date(t.reminderAt).getTime();
+    if (!isNaN(rt) && rt <= now) {
+      try {
+        new Notification(t.title || 'TODOリマインダー', {
+          body: (t.due ? '期限: ' + fmtDueShort(t.due) + '\n' : '') + (t.detail || '').slice(0, 100),
+          tag: 'todo-' + t.id,
+          requireInteraction: false
+        });
+        t.reminderFired = true;
+        t.modifiedAt = Date.now();
+        fired++;
+      } catch(e) { console.warn('Notification failed:', e); }
+    }
+  });
+  if (fired > 0) saveDB();
+}
+
+setInterval(checkReminders, 30 * 1000);
+window.addEventListener('focus', checkReminders);
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkReminders();
+});
+
 // Per-device client ID (stored once)
 function getClientId() {
   let id = localStorage.getItem('todo_client_id');
@@ -886,6 +987,60 @@ function fmtTime(iso) {
   const d = new Date(iso);
   const pad = n => String(n).padStart(2,'0');
   return `${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Format a due date in a user-friendly relative way
+function fmtDueShort(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2,'0');
+  const today = new Date(); today.setHours(0,0,0,0);
+  const target = new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((target - today) / 86400000);
+  const hm = pad(d.getHours()) + ':' + pad(d.getMinutes());
+  const hasTime = d.getHours() !== 0 || d.getMinutes() !== 0;
+  const tail = hasTime ? ' ' + hm : '';
+  if (diffDays === 0) return '今日' + tail;
+  if (diffDays === 1) return '明日' + tail;
+  if (diffDays === -1) return '昨日' + tail;
+  if (diffDays > 1 && diffDays <= 7) return diffDays + '日後' + tail;
+  if (diffDays < -1) return Math.abs(diffDays) + '日超過';
+  const dows = '日月火水木金土';
+  return `${d.getMonth()+1}/${d.getDate()}(${dows[d.getDay()]})${tail}`;
+}
+
+// Categorize due date state
+function dueState(iso, completedAt) {
+  if (!iso) return null;
+  if (completedAt) return 'done';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return null;
+  const now = Date.now();
+  const t = d.getTime();
+  if (t < now) return 'overdue';
+  const todayEnd = new Date(); todayEnd.setHours(23,59,59,999);
+  if (t <= todayEnd.getTime()) return 'today';
+  const soonEnd = new Date(); soonEnd.setDate(soonEnd.getDate() + 3); soonEnd.setHours(23,59,59,999);
+  if (t <= soonEnd.getTime()) return 'soon';
+  return 'future';
+}
+
+// Convert ISO to <input type="datetime-local"> value (YYYY-MM-DDTHH:MM in local TZ)
+function isoToLocalInputValue(iso) {
+  if (!iso) return '';
+  const d = new Date(iso);
+  if (isNaN(d.getTime())) return '';
+  const pad = n => String(n).padStart(2,'0');
+  return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())}T${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+// Convert <input type="datetime-local"> value to ISO (UTC) string
+function localInputToIso(local) {
+  if (!local) return null;
+  const d = new Date(local);
+  if (isNaN(d.getTime())) return null;
+  return d.toISOString();
 }
 
 function fmtDate(iso) {
@@ -1094,13 +1249,20 @@ function taskItemHtml(t, opts) {
   } else {
     dateLabel = `<span class="ti-date">追加: ${fmtDateTime(t.createdAt)}</span>`;
   }
-
-  return `<div class="ti" data-id="${t.id}">
+  const imp = t.importance || 1;
+  const ds = dueState(t.due, t.completedAt);
+  const dueBadge = t.due
+    ? `<span class="ti-due ${ds || ''}">${escHtml(fmtDueShort(t.due))}</span>`
+    : '';
+  const titleClass = t.completedAt ? 'done' : ('imp' + imp);
+  const rowClass = (ds === 'overdue' && !t.completedAt) ? ' overdue' : '';
+  return `<div class="ti${rowClass}" data-id="${t.id}">
     <input type="checkbox" class="ti-cb" ${t.completedAt ? 'checked' : ''}
       onclick="event.stopPropagation();toggleDone('${t.id}',this.checked)">
     <div class="ti-body" onclick="openDetail('${t.id}')">
-      <div class="ti-title${t.completedAt ? ' done' : ''}">${escHtml(t.title)}</div>
+      <div class="ti-title ${titleClass}">${escHtml(t.title)}</div>
       <div class="ti-meta">
+        ${dueBadge}
         ${dateLabel}
         ${badgeHtml(t.categoryId)}
         ${subText}
@@ -1136,7 +1298,17 @@ function openDetail(id) {
 
   // Meta
   const cat = getCat(t.categoryId);
-  let metaHtml = `<p>追加日時: <span>${fmtDateTime(t.createdAt)}</span></p>`;
+  const imp = t.importance || 1;
+  const impLabel = '⭐'.repeat(imp);
+  let metaHtml = `<p>重要度: <span class="imp${imp}-text">${impLabel}</span></p>`;
+  metaHtml += `<p>追加日時: <span>${fmtDateTime(t.createdAt)}</span></p>`;
+  if (t.due) {
+    const ds = dueState(t.due, t.completedAt);
+    metaHtml += `<p>期限: <span class="ti-due ${ds||''}">${escHtml(fmtDueShort(t.due))}</span> <span style="color:var(--g6);font-size:12px">(${fmtDateTime(t.due)})</span></p>`;
+  }
+  if (t.reminderAt) {
+    metaHtml += `<p>リマインダー: <span>${fmtDateTime(t.reminderAt)}</span></p>`;
+  }
   if (t.completedAt) metaHtml += `<p>完了日時: <span>${fmtDateTime(t.completedAt)}</span></p>`;
   if (cat) metaHtml += `<p>カテゴリ: <span><span class="badge" style="background:${cat.color}">${escHtml(cat.name)}</span></span></p>`;
   document.getElementById('detail-meta').innerHTML = metaHtml;
@@ -1204,18 +1376,39 @@ function deleteTask(id) {
 // ── Add / Edit Task Modal ─────────────────────────────────
 let editingTaskId = null;
 let editingSubtasks = [];
+let editingImportance = 1;
+let presetCreatedAt = null; // For calendar-day-tap-add: YYYY-MM-DD string
+
+function setImpField(level) {
+  editingImportance = level;
+  document.querySelectorAll('.imp-btn').forEach(b => {
+    b.classList.toggle('on', Number(b.dataset.imp) === level);
+  });
+}
 
 function openAddModal() {
   editingTaskId = null;
   editingSubtasks = [];
+  editingImportance = 1;
   document.getElementById('task-modal-title').textContent = 'タスクを追加';
   document.getElementById('task-save-btn').textContent = '追加';
   document.getElementById('f-title').value = '';
   document.getElementById('f-detail').value = '';
+  document.getElementById('f-due').value = '';
+  document.getElementById('f-reminder').value = '';
   populateCategorySelect(null);
+  setImpField(1);
   renderSubtaskFields();
   openModal('mk-task');
   setTimeout(() => document.getElementById('f-title').focus(), 300);
+}
+
+function openAddModalForDate(dateStr) {
+  presetCreatedAt = dateStr;
+  openAddModal();
+  // Pre-fill due input with the same date at end-of-day 18:00 as a hint
+  const due = dateStr + 'T18:00';
+  document.getElementById('f-due').value = due;
 }
 
 function openEditModal(id) {
@@ -1223,11 +1416,15 @@ function openEditModal(id) {
   if (!t) return;
   editingTaskId = id;
   editingSubtasks = (t.subtasks || []).map(s => ({...s}));
+  editingImportance = t.importance || 1;
   document.getElementById('task-modal-title').textContent = 'タスクを編集';
   document.getElementById('task-save-btn').textContent = '保存';
   document.getElementById('f-title').value = t.title;
   document.getElementById('f-detail').value = t.detail || '';
+  document.getElementById('f-due').value = isoToLocalInputValue(t.due);
+  document.getElementById('f-reminder').value = isoToLocalInputValue(t.reminderAt);
   populateCategorySelect(t.categoryId);
+  setImpField(editingImportance);
   renderSubtaskFields();
   closeModal('mk-detail');
   openModal('mk-task');
@@ -1287,6 +1484,8 @@ function saveTask() {
   }
 
   const now = Date.now();
+  const dueIso = localInputToIso(document.getElementById('f-due').value);
+  const remIso = localInputToIso(document.getElementById('f-reminder').value);
   if (editingTaskId) {
     const t = DB.tasks.find(t => t.id === editingTaskId);
     if (t) {
@@ -1294,14 +1493,35 @@ function saveTask() {
       t.categoryId = catId;
       t.detail = detail;
       t.subtasks = editingSubtasks;
+      t.importance = editingImportance;
+      t.due = dueIso;
+      // If reminder changed, reset fired flag
+      if (t.reminderAt !== remIso) {
+        t.reminderAt = remIso;
+        t.reminderFired = false;
+      }
       t.modifiedAt = now;
     }
     showToast('タスクを更新しました');
   } else {
+    // Compute createdAt: preset (calendar tap) or now
+    let createdAt = nowISO();
+    if (presetCreatedAt) {
+      // preserve current time-of-day but use preset date
+      const n = new Date();
+      const [y, m, dd] = presetCreatedAt.split('-').map(Number);
+      const c = new Date(y, m-1, dd, n.getHours(), n.getMinutes(), n.getSeconds());
+      createdAt = c.toISOString();
+      presetCreatedAt = null;
+    }
     DB.tasks.push({
       id: uid(), title, detail, categoryId: catId,
-      createdAt: nowISO(), completedAt: null,
+      createdAt, completedAt: null,
       subtasks: editingSubtasks,
+      importance: editingImportance,
+      due: dueIso,
+      reminderAt: remIso,
+      reminderFired: false,
       modifiedAt: now,
       deleted: false
     });
@@ -1310,7 +1530,9 @@ function saveTask() {
   invalidateDayMap();
   saveDB();
   renderTasks();
+  if (currentScreen === 'cal') renderCal();
   closeModal('mk-task');
+  if (remIso) requestNotificationPermission();
 }
 
 // Enter key to add subtask
@@ -1453,13 +1675,17 @@ function renderCalList() {
       <div class="cal-list-day-hd${isT ? ' today-hd' : ''}">${label}</div>
       ${tasks.map(t => {
         const cat = getCat(t.categoryId);
-        const dotColor = t.completedAt ? 'var(--ok)' : 'var(--warn)';
-        return `<div class="cal-list-item" onclick="openDetail('${t.id}')">
+        const dst = dueState(t.due, t.completedAt);
+        const imp = t.importance || 1;
+        const titleCls = t.completedAt ? 'done' : ('imp' + imp);
+        const dotColor = t.completedAt ? 'var(--ok)' : (dst === 'overdue' ? 'var(--ng)' : 'var(--warn)');
+        return `<div class="cal-list-item${dst === 'overdue' && !t.completedAt ? ' overdue' : ''}" onclick="openDetail('${t.id}')">
           <div class="cal-list-dot" style="background:${dotColor}"></div>
           <div class="cal-list-body">
             <div class="cal-list-title-row">
-              <span class="dp-title${t.completedAt ? ' done' : ''}">${escHtml(t.title)}</span>
-              ${cat ? `<span class="badge" style="background:${cat.color};font-size:10px">${escHtml(cat.name)}</span>` : ''}
+              <span class="dp-title ${titleCls}">${escHtml(t.title)}</span>
+              ${t.due ? `<span class="ti-due ${dst || ''}">${escHtml(fmtDueShort(t.due))}</span>` : ''}
+              ${cat ? `<span class="badge" style="background:${cat.color};font-size:11px">${escHtml(cat.name)}</span>` : ''}
             </div>
             <div class="cal-list-times">
               <span>追加: ${fmtDateTime(t.createdAt)}</span>
@@ -1522,18 +1748,26 @@ function openDayPopup(ds) {
   document.getElementById('day-popup-date').textContent =
     `${d.getFullYear()}年${d.getMonth()+1}月${d.getDate()}日（${'日月火水木金土'[d.getDay()]}）`;
 
+  const addBtn = `<button class="add-task-btn" style="margin:6px 0 12px;padding:11px"
+    onclick="closeModal('mk-day');openAddModalForDate('${ds}')">＋ この日にタスクを追加</button>`;
+
+  let listHtml = '';
   if (tasks.length === 0) {
-    document.getElementById('day-popup-list').innerHTML = `<p style="color:var(--g6);font-size:14px;padding:12px 0">この日のタスクはありません</p>`;
+    listHtml = `<p style="color:var(--g6);font-size:14px;padding:8px 0">この日のタスクはありません</p>`;
   } else {
-    document.getElementById('day-popup-list').innerHTML = tasks.map(t => {
+    listHtml = tasks.map(t => {
       const cat = getCat(t.categoryId);
-      const dotColor = t.completedAt ? 'var(--ok)' : 'var(--warn)';
+      const dst = dueState(t.due, t.completedAt);
+      const imp = t.importance || 1;
+      const titleCls = t.completedAt ? 'done' : ('imp' + imp);
+      const dotColor = t.completedAt ? 'var(--ok)' : (dst === 'overdue' ? 'var(--ng)' : 'var(--warn)');
       return `<div class="dp-item" onclick="closeModal('mk-day');openDetail('${t.id}')">
         <div class="dp-dot" style="background:${dotColor}"></div>
         <div class="dp-body">
           <div class="dp-title-row">
-            <span class="dp-title${t.completedAt ? ' done' : ''}">${escHtml(t.title)}</span>
-            ${cat ? `<span class="badge" style="background:${cat.color};font-size:10px">${escHtml(cat.name)}</span>` : ''}
+            <span class="dp-title ${titleCls}">${escHtml(t.title)}</span>
+            ${t.due ? `<span class="ti-due ${dst || ''}">${escHtml(fmtDueShort(t.due))}</span>` : ''}
+            ${cat ? `<span class="badge" style="background:${cat.color};font-size:11px">${escHtml(cat.name)}</span>` : ''}
             <span style="font-size:11px;color:var(--g5)">${t.completedAt ? '完了' : '未完了'}</span>
           </div>
           <div class="dp-times">
@@ -1544,6 +1778,7 @@ function openDayPopup(ds) {
       </div>`;
     }).join('');
   }
+  document.getElementById('day-popup-list').innerHTML = addBtn + listHtml;
   openModal('mk-day');
 }
 
@@ -1551,9 +1786,11 @@ function openDayPopup(ds) {
 let editingCatId = null;
 
 function renderSettings() {
-  // Sync UI
+  // Sync UI — restore from SYNC.url (which is auto-saved on each keystroke)
   const urlInp = document.getElementById('sync-url-inp');
-  if (urlInp) urlInp.value = SYNC.url || '';
+  if (urlInp && document.activeElement !== urlInp) {
+    urlInp.value = SYNC.url || '';
+  }
   const autoCb = document.getElementById('sync-auto-cb');
   if (autoCb) autoCb.checked = !!SYNC.autoSync;
   const pullCb = document.getElementById('sync-pull-cb');
@@ -1705,6 +1942,22 @@ function showToast(msg) {
   if (toastTimer) clearTimeout(toastTimer);
   toastTimer = setTimeout(() => el.classList.remove('on'), 2200);
 }
+
+// ── Settings: auto-persist GAS URL on every keystroke ─────
+(function wireSyncUrlAutoSave(){
+  const inp = document.getElementById('sync-url-inp');
+  if (!inp) return;
+  const persist = debounce(() => {
+    SYNC.url = inp.value.trim();
+    saveSync();
+    renderSyncStatus();
+  }, 200);
+  inp.addEventListener('input', persist);
+  inp.addEventListener('blur', () => {
+    SYNC.url = inp.value.trim();
+    saveSync();
+  });
+})();
 
 // ── Search wiring (debounced) ─────────────────────────────
 function debounce(fn, ms) {
