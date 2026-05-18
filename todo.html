@@ -626,6 +626,12 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
 <script>
 'use strict';
 
+// ── Debug helper (silent unless ?debug=1 in URL) ─────────
+const DEBUG = /[?&]debug=1\b/.test(location.search);
+function debug() {
+  if (DEBUG) console.log.apply(console, ['[todo]'].concat([].slice.call(arguments)));
+}
+
 // ── Storage ──────────────────────────────────────────────
 const LS_KEY = 'todo_app_v1';
 const LS_BK0 = 'todo_app_v1_bk0';
@@ -737,14 +743,13 @@ function loadDB() {
       const parsed = JSON.parse(raw);
       DB = validateAndMigrate(parsed);
       if (src.label !== 'main') {
-        console.warn('Restored from ' + src.label);
-        // Re-save to main slot
+        debug('Restored from ' + src.label);
         try { localStorage.setItem(LS_KEY, JSON.stringify(DB)); }
-        catch(e) { console.error('re-save failed:', e); }
+        catch(e) { debug('re-save failed:', e); }
       }
       return;
     } catch(e) {
-      console.warn('load from ' + src.label + ' failed:', e);
+      debug('load from ' + src.label + ' failed:', e);
     }
   }
   // Nothing loaded - fresh start
@@ -776,7 +781,7 @@ function saveDB(opts) {
       if (verify !== json) throw new Error('write verification mismatch');
       saved = true;
     } catch(e) {
-      console.error('saveDB attempt ' + attempts + ' failed:', e);
+      debug('saveDB attempt ' + attempts + ' failed:', e);
       if (e && (e.name === 'QuotaExceededError' || /quota/i.test(e.message || ''))) {
         // Free space by removing older backups
         try { localStorage.removeItem(LS_BK1); } catch(_) {}
@@ -784,6 +789,7 @@ function saveDB(opts) {
           try { localStorage.removeItem(LS_BK0); } catch(_) {}
         }
       } else if (attempts >= 3) {
+        console.error('saveDB: all attempts failed:', e);
         showToast('保存失敗: ' + e.message);
         return false;
       }
@@ -809,13 +815,13 @@ function loadSync() {
     const raw = localStorage.getItem(LS_SYNC);
     if (raw) SYNC = Object.assign(SYNC, JSON.parse(raw));
   } catch(e) {
-    console.warn('loadSync failed:', e);
+    debug('loadSync failed:', e);
   }
 }
 
 function saveSync() {
   try { localStorage.setItem(LS_SYNC, JSON.stringify(SYNC)); }
-  catch(e) { console.error('saveSync failed:', e); }
+  catch(e) { debug('saveSync failed:', e); }
 }
 
 // ── Cloud Sync (Google Apps Script) ───────────────────────
@@ -853,7 +859,7 @@ async function testSync() {
     else throw new Error(json.error || '不明なエラー');
   } catch(e) {
     showToast('接続失敗: ' + e.message);
-    console.error('testSync failed:', e);
+    debug('testSync failed:', e);
   }
 }
 
@@ -926,7 +932,7 @@ async function pushSync(silent) {
     if (!silent) showToast('クラウドへ送信しました ✓');
     return true;
   } catch(e) {
-    console.error('pushSync failed:', e);
+    debug('pushSync failed:', e);
     if (!silent) showToast('送信失敗: ' + (e.message || e));
     // Schedule retry with exponential backoff if auto-sync on
     if (SYNC.autoSync && SYNC.url) {
@@ -974,7 +980,7 @@ async function pullSync(silent) {
     return true;
   } catch(e) {
     if (!silent) showToast('取得失敗: ' + (e.message || e));
-    console.error('pullSync failed:', e);
+    debug('pullSync failed:', e);
     return false;
   }
 }
@@ -1006,7 +1012,7 @@ function checkReminders() {
           r.fired = true;
           t.modifiedAt = Date.now();
           fired++;
-        } catch(e) { console.warn('Notification failed:', e); }
+        } catch(e) { debug('Notification failed:', e); }
       }
     });
   });
@@ -2183,7 +2189,7 @@ function importData(e) {
       renderSettings();
       showToast('インポートしました');
     } catch(err) {
-      console.error('importData failed:', err);
+      debug('importData failed:', err);
       showToast('ファイル形式エラー: ' + err.message);
     }
   };
@@ -2293,7 +2299,7 @@ function flushOnExit() {
       xhr.setRequestHeader('Content-Type', 'text/plain;charset=utf-8');
       xhr.send(body);
     }
-  } catch(e) { console.warn('flushOnExit failed:', e); }
+  } catch(e) { debug('flushOnExit failed:', e); }
 }
 
 window.addEventListener('pagehide', flushOnExit);
@@ -2305,7 +2311,7 @@ document.addEventListener('visibilitychange', () => {
 (function init() {
   if (!storageOK()) {
     showToast('localStorageが利用できません。データが保存されません。');
-    console.warn('localStorage unavailable');
+    debug('localStorage unavailable');
   }
   loadDB();
   loadSync();
@@ -2315,7 +2321,7 @@ document.addEventListener('visibilitychange', () => {
   } catch(_) {}
   renderTasks();
   if (SYNC.pullOnStart && SYNC.url) {
-    pullSync(true).catch(e => console.warn('startup pull failed:', e));
+    pullSync(true).catch(e => debug('startup pull failed:', e));
   } else if (pendingPush && SYNC.autoSync && SYNC.url) {
     // Previous session had unpushed changes — try now
     setTimeout(() => pushSync(true), 1000);
