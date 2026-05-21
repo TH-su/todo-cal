@@ -883,7 +883,7 @@ async function testSync() {
     if (json.ok) showToast('接続OK ✓');
     else throw new Error(json.error || '不明なエラー');
   } catch(e) {
-    showToast('接続失敗: ' + e.message);
+    showToast('接続失敗: ' + friendlySyncError(e));
     debug('testSync failed:', e);
   }
 }
@@ -927,6 +927,30 @@ async function fetchWithTimeout(url, opts, timeoutMs) {
   }
 }
 
+// Translate raw sync errors into actionable Japanese guidance
+function friendlySyncError(e) {
+  const msg = String((e && e.message) || e || '');
+  if (/Illegal spreadsheet id or key|スプレッドシートが見つかりません/i.test(msg)) {
+    return 'GAS側の設定が未完了です。TODO-SETUP.md の最新コードをApps Scriptに貼り直し、再デプロイしてください';
+  }
+  if (/Failed to fetch|Load failed|NetworkError|ERR_/i.test(msg)) {
+    return '接続できません。URLが正しいか、GASのアクセス権限が「全員」か、ネットワークを確認してください';
+  }
+  if (/HTTP 401|HTTP 403/i.test(msg)) {
+    return 'アクセスが拒否されました。GASのデプロイ設定「アクセスできるユーザー」を「全員」にしてください';
+  }
+  if (/HTTP 404/i.test(msg)) {
+    return 'URLが見つかりません。GAS WebアプリURLが /exec で終わっているか確認してください';
+  }
+  if (/timeout|aborted|abort/i.test(msg)) {
+    return '応答がありません（タイムアウト）。時間をおいて再試行してください';
+  }
+  if (/Unexpected token|JSON|SyntaxError/i.test(msg)) {
+    return 'GASの応答が不正です。デプロイが最新版か、URLが /exec で終わっているか確認してください';
+  }
+  return msg || '不明なエラー';
+}
+
 async function pushSync(silent) {
   if (!SYNC.url) {
     if (!silent) showToast('URLを設定してください');
@@ -958,7 +982,7 @@ async function pushSync(silent) {
     return true;
   } catch(e) {
     debug('pushSync failed:', e);
-    if (!silent) showToast('送信失敗: ' + (e.message || e));
+    if (!silent) showToast('送信失敗: ' + friendlySyncError(e));
     // Schedule retry with exponential backoff if auto-sync on
     if (SYNC.autoSync && SYNC.url) {
       if (pushRetryTimer) clearTimeout(pushRetryTimer);
@@ -1027,7 +1051,7 @@ async function pullSync(silent) {
     if (!silent) showToast('クラウドから取得しました ✓');
     return true;
   } catch(e) {
-    if (!silent) showToast('取得失敗: ' + (e.message || e));
+    if (!silent) showToast('取得失敗: ' + friendlySyncError(e));
     debug('pullSync failed:', e);
     return false;
   }
@@ -1797,13 +1821,48 @@ function jumpToMonth(y, m) {
   setCalView('grid');
 }
 
+// ── Navigation by variable amount (smooth swipe) ──────────
+// dir: +1 = forward (next), -1 = backward (prev). magnitude scales with swipe distance.
+function navByDistance(dir, distancePx) {
+  const dist = Math.abs(distancePx) || 80;
+  if (calView === 'year') {
+    calYear += dir;
+  } else if (calView === 'grid' || calView === 'list') {
+    const months = Math.max(1, Math.round(dist / 240));
+    let total = calYear * 12 + calMonth + dir * months;
+    calYear = Math.floor(total / 12);
+    calMonth = ((total % 12) + 12) % 12;
+  } else if (calView === 'week') {
+    // smooth: ~1 day per 45px, no fixed week step
+    const daysN = Math.max(1, Math.round(dist / 45));
+    calRefDate.setDate(calRefDate.getDate() + dir * daysN);
+  } else if (calView === '2day') {
+    const daysN = Math.max(1, Math.round(dist / 60));
+    calRefDate.setDate(calRefDate.getDate() + dir * daysN);
+  }
+  renderCal();
+}
+
 // ── Swipe handler ─────────────────────────────────────────
 let _swipeHandlerAttached = false;
+let _justSwiped = false;
 function attachSwipe() {
   if (_swipeHandlerAttached) return;
   const el = document.getElementById('cal-content');
   if (!el) return;
   let startX = 0, startY = 0, tracking = false;
+
+  function finishSwipe(dx, dy) {
+    if (Math.abs(dx) > 45 && Math.abs(dx) > Math.abs(dy) * 1.2) {
+      _justSwiped = true;
+      navByDistance(dx < 0 ? 1 : -1, dx);
+      // clear the flag shortly after the synthesized click would fire
+      setTimeout(() => { _justSwiped = false; }, 400);
+      return true;
+    }
+    return false;
+  }
+
   el.addEventListener('touchstart', e => {
     if (e.touches.length !== 1) return;
     startX = e.touches[0].clientX;
@@ -1814,21 +1873,28 @@ function attachSwipe() {
     if (!tracking) return;
     tracking = false;
     const t = e.changedTouches[0];
-    const dx = t.clientX - startX;
-    const dy = t.clientY - startY;
-    if (Math.abs(dx) > 60 && Math.abs(dx) > Math.abs(dy) * 1.5) {
-      if (dx < 0) navNext(); else navPrev();
-    }
+    finishSwipe(t.clientX - startX, t.clientY - startY);
   }, { passive: true });
-  // Mouse-drag fallback for desktop testing
-  let mDown = false, mx = 0;
-  el.addEventListener('mousedown', e => { mDown = true; mx = e.clientX; });
+  el.addEventListener('touchcancel', () => { tracking = false; }, { passive: true });
+
+  // Mouse-drag fallback for desktop
+  let mDown = false, mx = 0, my = 0;
+  el.addEventListener('mousedown', e => { mDown = true; mx = e.clientX; my = e.clientY; });
   el.addEventListener('mouseup', e => {
     if (!mDown) return;
     mDown = false;
-    const dx = e.clientX - mx;
-    if (Math.abs(dx) > 80) { if (dx < 0) navNext(); else navPrev(); }
+    finishSwipe(e.clientX - mx, e.clientY - my);
   });
+
+  // Suppress the ghost click that follows a swipe (prevents opening detail modal)
+  el.addEventListener('click', e => {
+    if (_justSwiped) {
+      e.stopPropagation();
+      e.preventDefault();
+      _justSwiped = false;
+    }
+  }, true);
+
   _swipeHandlerAttached = true;
 }
 
@@ -1918,10 +1984,7 @@ function renderCalList() {
   const today = todayStr();
   const sortedDays = Object.keys(dayMap).sort((a,b) => a > b ? -1 : 1);
 
-  if (sortedDays.length === 0) {
-    return `<div class="empty-msg">タスクがありません</div>`;
-  }
-
+  // Nav bar is ALWAYS rendered so swipe/buttons keep working even with no tasks
   let html = `<div class="cal-nav">
     <button class="cal-nav-btn" onclick="navPrev()">◀</button>
     <span class="cal-title">${calYear}年${calMonth+1}月</span>
