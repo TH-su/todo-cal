@@ -458,6 +458,11 @@ select.inp{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns
       <div class="form-row">
         <label>GAS Webアプリ URL</label>
         <input type="url" class="inp" id="sync-url-inp" placeholder="https://script.google.com/macros/s/.../exec" autocomplete="off">
+        <p style="font-size:12px;color:var(--g6);margin-top:5px;line-height:1.5">
+          ✅ 正しい URL：<code>/macros/s/AKfycb.../exec</code>（末尾が <code>/exec</code>）<br>
+          ❌ 間違い：<code>/macros/library/d/...</code>（これは「ライブラリ URL」）<br>
+          「デプロイを管理」画面の<strong>一番上</strong>の URL をコピーしてください。
+        </p>
       </div>
       <div class="btn-row" style="margin-bottom:10px">
         <button class="btn btn-pri btn-sm" onclick="saveSyncUrl()">URL保存</button>
@@ -833,10 +838,37 @@ function saveSync() {
 }
 
 // ── Cloud Sync (Google Apps Script) ───────────────────────
+// Validate the URL shape; returns {ok:boolean, msg:string}
+function checkSyncUrlShape(url) {
+  if (!url) return { ok: true, msg: '' };
+  if (/\/macros\/library\/d\//.test(url)) {
+    return { ok: false, msg:
+      '⚠️ これは「ライブラリ URL」です。\n\n' +
+      '「デプロイを管理」画面の一番上にある\n' +
+      'https://script.google.com/macros/s/.../exec\n' +
+      'で終わる URL をコピーしてください。\n\n' +
+      '（「ライブラリ」見出しの下の URL ではありません）' };
+  }
+  if (/\/macros\/s\/[^\/]+\/dev$/.test(url)) {
+    return { ok: false, msg:
+      '⚠️ これは「テスト用 URL」(/dev) です。\n' +
+      '末尾が /exec の本番 URL を使用してください。' };
+  }
+  if (!/^https:\/\/script\.google\.com\/macros\/s\/[^\/]+\/exec\/?$/.test(url)) {
+    return { ok: false, msg:
+      'URL が GAS ウェブアプリの形式と異なります。\n' +
+      'https://script.google.com/macros/s/.../exec\n' +
+      'の形式か確認してください。' };
+  }
+  return { ok: true, msg: '' };
+}
+
 function saveSyncUrl() {
   const url = document.getElementById('sync-url-inp').value.trim();
-  if (url && !/^https:\/\/script\.google\.com\/macros\/s\/[^\/]+\/exec/.test(url)) {
-    if (!confirm('URLがGAS Webアプリの形式と異なります。続行しますか？')) return;
+  const shape = checkSyncUrlShape(url);
+  if (!shape.ok) {
+    alert(shape.msg);
+    return; // block saving an obviously-wrong URL
   }
   const isFirstSet = !SYNC.url && !!url;
   SYNC.url = url;
@@ -875,13 +907,36 @@ function setPullOnStart(on) {
 
 async function testSync() {
   if (!SYNC.url) { showToast('URLを入力してください'); return; }
+  const shape = checkSyncUrlShape(SYNC.url);
+  if (!shape.ok) { alert(shape.msg); return; }
   showToast('接続テスト中...');
   try {
-    const res = await fetch(SYNC.url + '?action=ping', { method:'GET' });
-    if (!res.ok) throw new Error('HTTP ' + res.status);
-    const json = await res.json();
-    if (json.ok) showToast('接続OK ✓');
-    else throw new Error(json.error || '不明なエラー');
+    // Step 1: ping (basic reachability)
+    const r1 = await fetchWithTimeout(SYNC.url + '?action=ping', { method:'GET' }, 30000);
+    if (!r1.ok) throw new Error('HTTP ' + r1.status);
+    const j1 = await r1.json();
+    if (!j1.ok) throw new Error(j1.error || 'ping応答が不正');
+
+    // Step 2: load (verifies spreadsheet access — catches GAS code/redeploy issues)
+    const r2 = await fetchWithTimeout(SYNC.url + '?action=load', { method:'GET' }, 30000);
+    if (!r2.ok) throw new Error('HTTP ' + r2.status);
+    const j2 = await r2.json();
+    if (!j2.ok) {
+      throw new Error('読み込みエラー: ' + (j2.error || '不明') +
+        ' — GASコードを最新版に貼り替えて再デプロイしてください');
+    }
+
+    // Step 3: save round-trip (verifies write access)
+    const r3 = await fetchWithTimeout(SYNC.url, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain;charset=utf-8' },
+      body: JSON.stringify({ action: 'save', data: DB, clientId: getClientId() })
+    }, 30000);
+    if (!r3.ok) throw new Error('HTTP ' + r3.status);
+    const j3 = await r3.json();
+    if (!j3.ok) throw new Error('書き込みエラー: ' + (j3.error || '不明'));
+
+    showToast('接続OK ✓ 読み書き両方成功しました');
   } catch(e) {
     showToast('接続失敗: ' + friendlySyncError(e));
     debug('testSync failed:', e);
@@ -930,10 +985,19 @@ async function fetchWithTimeout(url, opts, timeoutMs) {
 // Translate raw sync errors into actionable Japanese guidance
 function friendlySyncError(e) {
   const msg = String((e && e.message) || e || '');
+  // Wrong URL type: library URL instead of web app URL
+  if (SYNC.url && /\/macros\/library\/d\//.test(SYNC.url)) {
+    return 'URLが「ライブラリURL」です。デプロイ画面の一番上の /exec で終わるURLに貼り替えてください';
+  }
   if (/Illegal spreadsheet id or key|スプレッドシートが見つかりません/i.test(msg)) {
     return 'GAS側の設定が未完了です。TODO-SETUP.md の最新コードをApps Scriptに貼り直し、再デプロイしてください';
   }
   if (/Failed to fetch|Load failed|NetworkError|ERR_/i.test(msg)) {
+    // If the URL shape is valid (/exec), the usual cause is a GAS server-side
+    // error returning an HTML page without CORS headers → fetch network error.
+    if (SYNC.url && /\/macros\/s\/[^\/]+\/exec\/?$/.test(SYNC.url)) {
+      return 'GASがエラー応答を返しています。最新のGASコードを貼り直し「デプロイ→編集→新バージョン→デプロイ」で再デプロイしてください（アクセス権限は「全員」）';
+    }
     return '接続できません。URLが正しいか、GASのアクセス権限が「全員」か、ネットワークを確認してください';
   }
   if (/HTTP 401|HTTP 403/i.test(msg)) {
